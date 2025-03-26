@@ -2,3 +2,9 @@
 *.idea
 *.venv
 *.DS_Store
+*.pdf
+*chroma_langchain_db
+*splitted_docs
+*Data
+*corpus
+*__pycache__
