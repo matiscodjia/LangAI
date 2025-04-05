@@ -5,6 +5,6 @@
 *.pdf
 *chroma_langchain_db
 *splitted_docs
-*Data
+*data
 *corpus
 *__pycache__
