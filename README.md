@@ -56,6 +56,7 @@ Exécutez la commande suivante à la racine du projet :
 
 ```bash
 pip install -r requirements.txt
+```
 
 
 Data Processor
