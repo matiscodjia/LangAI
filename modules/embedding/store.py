@@ -1,10 +1,11 @@
 from chromadb import PersistentClient
-import numpy as np
 from tqdm import tqdm
+from langchain_ollama import OllamaEmbeddings
+from modules.data_managing.metadata_gen import resolve_path
 ##Pas d'écriture concurrente possible
 
-
-def store_documents(docs,embedding_model, collection_name="documents_collection",path="data/chroma_db"):
+EMBEDDING="nomic-embed-text"
+def store_documents(docs,collection_name="documents_collection",path="data/chroma_db"):
     """
     Pour chaque document de la liste, calcule son embedding et l'insère dans la collection ChromaDB
     dans le namespace spécifié.
@@ -15,19 +16,19 @@ def store_documents(docs,embedding_model, collection_name="documents_collection"
     :param collection_name: Nom de la collection dans ChromaDB
     """
     # Initialiser le client ChromaDB et récupérer ou créer la collection
+    path=resolve_path(path)
+    embedding_model=OllamaEmbeddings(model=EMBEDDING)
     client = PersistentClient(path=path)
     collection = client.get_or_create_collection(name=collection_name)
-    
     # Boucle avec tqdm pour afficher la progression
-    for idx, doc in enumerate(tqdm(docs,colour="cyan")):
-        # Créer un identifiant unique pour ce document dans ce namespace
+    for idx, doc in enumerate(tqdm(docs,colour="cyan")):            # Créer un identifiant unique pour ce document dans ce namespace
         doc_id = f"{idx}"
         # Calculer l'embedding du contenu du document
-        doc_embedding = embedding_model.embed_documents([doc.page_content])[0]
-        # Insérer le document dans la collection en spécifiant le namespace
+        doc_embedding = embedding_model.embed_documents([doc.page_content])[0]            # Insérer le document dans la collection en spécifiant le namespace
         collection.add(
-            ids=[doc_id],
-            embeddings=[doc_embedding],
+            ids=[doc_id],                embeddings=[doc_embedding],
             metadatas=[doc.metadata],
-            documents=[doc.page_content],
-        )
+         documents=[doc.page_content],
+            )
+
+

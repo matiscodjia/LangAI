@@ -59,7 +59,7 @@ pip install -r requirements.txt
 ```
 
 
-Data Processor
+# Data Processor
 	•	metadata_gen.py :
 Lit les fichiers texte, extrait les métadonnées (sommaire, thème global, entités nommées via spaCy), et stocke ces informations dans une base DuckDB.
 
