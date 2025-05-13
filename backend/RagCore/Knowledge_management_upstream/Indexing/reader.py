@@ -2,7 +2,7 @@ import duckdb
 from collections import defaultdict
 import os
 import random
-from modules.data_managing.metadata_gen import resolve_path
+from reader import resolve_path
 def read_metadata_from_duckdb(duckdb_file):
     duckdb_file = str(resolve_path(duckdb_file))
     """

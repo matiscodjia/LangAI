@@ -1,7 +1,7 @@
 from chromadb import PersistentClient
 from tqdm import tqdm
 from langchain_ollama import OllamaEmbeddings
-from modules.data_managing.metadata_gen import resolve_path
+from backend.RagCore.KnowledgeManagement.Indexing.metadataGenerator import resolve_path
 ##Pas d'écriture concurrente possible
 
 EMBEDDING="nomic-embed-text"

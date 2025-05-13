@@ -1,7 +1,7 @@
-from modules.data_managing.read import *
-from modules.data_managing.metadata_gen import *
-from modules.embedding.store import *
-from modules.splitting.splitter import *
+"""from RagCore.KnowledgeManagement.Indexing.reader import *
+from RagCore.KnowledgeManagement.Indexing.metadata_generator import *
+from RagCore.KnowledgeManagement.Embedding.store import *
+from RagCore.KnowledgeManagement.Indexing.splitter import *
 
 ## Il s'agit ici de mettre au point l'état initial de nos bases de données
 ## (Base de texte et base de vecteurs)
@@ -34,3 +34,15 @@ docs_fixed = base_split()
 store_documents(docs=docs_semantic, collection_name="semantic",path=CHROMA_PATH)
 store_documents(docs=docs_recursive, collection_name="recursive",path=CHROMA_PATH)
 store_documents(docs=docs_fixed, collection_name="fixed",path=CHROMA_PATH)
+
+
+"""
+from RagCore.KnowledgeManagement.Indexing.duckdbManager import DuckDBManager
+from RagCore.Utils.pathProvider import PathProvider
+
+# Running pipeline
+
+## Metadata + text storage in duckdb
+provider = PathProvider()
+duckDBManager = DuckDBManager()
+duckDBManager.process_text_file_to_duckdb(provider.raw_data("1881-01-11.txt"))
