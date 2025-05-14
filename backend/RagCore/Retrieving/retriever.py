@@ -1,38 +1,15 @@
 from langchain_chroma import Chroma
-from langchain.chains import RetrievalQA
-from backend.RagCore.KnowledgeManagement.Indexing.metadataGenerator import resolve_path
-from langchain_ollama import OllamaLLM, OllamaEmbeddings
-import numpy as np
-from langchain.chains import LLMChain
+from langchain.chains import RetrievalQA, LLMChain
 from langchain.prompts import PromptTemplate
 from langchain.schema import Document
 from langchain.llms.base import LLM
-from typing import List
+from langchain_ollama import OllamaLLM, OllamaEmbeddings
+from typing import List, Optional
 import numpy as np
 
-def get_retriever(collection, k, metadata_filter=None):
-    embedding_function = OllamaEmbeddings(model="nomic-embed-text")
-    chroma = Chroma(
-        collection_name=collection,
-        embedding_function=embedding_function,
-        persist_directory=resolve_path("data/chroma_db")
-    )
+from backend.RagCore.Utils.pathProvider import PathProvider
 
-    search_kwargs = {"k": k}
-    if metadata_filter:
-        search_kwargs["filter"] = metadata_filter
-
-    return chroma.as_retriever(search_kwargs=search_kwargs)
-
-def get_qa_chain(collection, k):
-        llm = OllamaLLM(model="llama3.2")
-        return RetrievalQA.from_chain_type(
-        llm=llm,
-        retriever=get_retriever(collection, k),
-        return_source_documents=True
-    )
-
-##Prompts pour QUERY REWRITING - QUERY TRANSFORMING - HyDE cherceh ldes question plus pertinentes
+# Prompt templates
 REWRITE_PROMPT = PromptTemplate.from_template(
     "Réécris cette question de façon plus précise pour interroger une base documentaire : {question}"
 )
@@ -45,76 +22,96 @@ HYDE_PROMPT = PromptTemplate.from_template(
     "Imagine une réponse hypothétique à cette question : {question}"
 )
 
+import os
+from dotenv import load_dotenv
 
-def rewrite_query(llm: LLM, question: str) -> str:
-    chain = LLMChain(llm=llm, prompt=REWRITE_PROMPT)
-    return chain.invoke(question)["text"]
+# Charge les variables de .env
+load_dotenv()
 
-## Pour l'instant ici c'est une query composée de plusieurs queries l'idée est de faire circuler dans des flux parallèles les queries obtenues
-def get_multi_queries(llm: LLM, question: str) -> List[str]:
-    chain = LLMChain(llm=llm, prompt=MULTI_QUERY_PROMPT)
-    output = chain.invoke(question)["text"]
-    return [q.strip("- ") for q in output.strip().split("\n") if q.strip()]
+OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "llama3.2")
+OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+class RAGRetriever:
+    def __init__(
+        self,
+        collection_name: str,
+        persist_path: Optional[str] = None,
+    ):
+        self.llm: LLM = OllamaLLM(model=OLLAMA_LLM_MODEL)
+        self.embedder = OllamaEmbeddings(model=OLLAMA_EMBEDDING_MODEL)
+        provider = PathProvider()
+        self.chroma = Chroma(
+            collection_name=collection_name,
+            embedding_function=self.embedder,
+            persist_directory=persist_path or str(provider.chroma())
+        )
+        self.retriever = self.chroma.as_retriever(search_kwargs={"k": 10})
 
-## Ici aussi besoin de générer de veritables documents et non une simple réponse
-def get_hypothetical_answer(llm: LLM, question: str) -> str:
-    chain = LLMChain(llm=llm, prompt=HYDE_PROMPT)
-    return chain.invoke(question)["text"]
+    def get_qa_chain(self, k: int = 5) -> RetrievalQA:
+        return RetrievalQA.from_chain_type(
+            llm=self.llm,
+            retriever=self.retriever,
+            return_source_documents=True
+        )
 
+    def _rewrite_query(self, question: str) -> str:
+        chain = REWRITE_PROMPT | self.llm
+        return chain.invoke(question)
 
-## Ici c'est juste mieux que rine à voir sur la manière de comparer les documents (sémantique c'est mieux)
-def deduplicate_docs_naive(documents: List[Document]) -> List[Document]:
-    seen = set()
-    unique_docs = []
-    for doc in documents:
-        key = doc.page_content.strip()[:100] 
-        if key not in seen:
-            seen.add(key)
-            unique_docs.append(doc)
-    return unique_docs
+    def _get_multi_queries(self, question: str) -> List[str]:
+        chain = MULTI_QUERY_PROMPT | self.llm
+        output = chain.invoke(question)
+        return [q.strip("- ") for q in output.strip().split("\n") if q.strip()]
 
-def basic_rerank(docs: List[Document], query: str, embedder) -> List[Document]:
-    """
-    Classe un ensemble de documents selon leur similarité  avec la requête, via embeddings.
-    """
-    query_vec = embedder.embed_query(query)
-    scores = [np.dot(embedder.embed_query(doc.page_content), query_vec) for doc in docs]
-    scored_docs = list(zip(docs, scores))
-    scored_docs.sort(key=lambda x: x[1], reverse=True)
-    return [doc for doc, score in scored_docs]
+    def _get_hypothetical_answer(self, question: str) -> str:
+        chain =  HYDE_PROMPT | self.llm
+        return chain.invoke(question)
 
-def enhanced_retrieve(
-    llm,
-    retriever,
-    question: str,
-    embedder,
-    use_query_rewrite: bool = True,
-    use_multi_query: bool = True,
-    use_hyde: bool = True,
-    top_k: int = 10,
-) -> List[Document]:
-    queries = [question]
+    def _deduplicate_docs(self, docs: List[Document]) -> List[Document]:
+        seen = set()
+        unique = []
+        for doc in docs:
+            key = doc.page_content.strip()[:100]
+            if key not in seen:
+                seen.add(key)
+                unique.append(doc)
+        return unique
 
-    if use_query_rewrite:
-        rewritten = rewrite_query(llm, question)
-        queries.append(rewritten)
-    else:
-        rewritten = question
+    def _rerank(self, docs: List[Document], query: str) -> List[Document]:
+        query_vec = self.embedder.embed_query(query)
+        scores = [np.dot(self.embedder.embed_query(doc.page_content), query_vec) for doc in docs]
+        scored = sorted(zip(docs, scores), key=lambda x: x[1], reverse=True)
+        return scored #[doc for doc, _ in scored]
 
-    if use_multi_query:
-        multi_queries = get_multi_queries(llm, rewritten)
-        queries.extend(multi_queries)
-    all_docs = []
-    for q in queries:
-        docs = retriever.invoke(q)
-        all_docs.extend(docs)
+    def retrieve(
+        self,
+        question: str,
+        use_rewrite: bool = True,
+        use_multi_query: bool = True,
+        use_hyde: bool = True,
+        top_k: int = 10,
+    ) -> List[Document]:
+        queries = [question]
 
-    if use_hyde:
-        hypo = get_hypothetical_answer(llm, question)
-        hypo_embedding = embedder.embed_query(hypo)
-        hyde_docs = retriever.vectorstore.similarity_search_by_vector(hypo_embedding, k=top_k)
-        all_docs.extend(hyde_docs)
+        if use_rewrite:
+            rewritten = self._rewrite_query(question)
+            queries.append(rewritten)
+        else:
+            rewritten = question
 
-    fused = deduplicate_docs_naive(all_docs)
-    reranked = basic_rerank(fused, question, embedder)
-    return reranked[:top_k]
+        if use_multi_query:
+            queries.extend(self._get_multi_queries(rewritten))
+
+        all_docs = []
+        for q in queries:
+            docs = self.retriever.invoke(q)
+            all_docs.extend(docs)
+
+        if use_hyde:
+            hypo = self._get_hypothetical_answer(question)
+            hypo_embedding = self.embedder.embed_query(hypo)
+            hyde_docs = self.chroma.similarity_search_by_vector(hypo_embedding, k=top_k)
+            all_docs.extend(hyde_docs)
+
+        fused = self._deduplicate_docs(all_docs)
+        scored_docs = self._rerank(fused, question)
+        return scored_docs[:top_k]  # List[(Document, float)]

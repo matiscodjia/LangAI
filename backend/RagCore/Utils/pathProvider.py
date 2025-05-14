@@ -55,7 +55,8 @@ class PathProvider:
                     date TEXT,
                     sommaire TEXT,
                     theme_global TEXT,
-                    texte TEXT
+                    texte TEXT,
+                    is_already_splitted BOOLEAN DEFAULT FALSE
                 )
             """)
             con.close()

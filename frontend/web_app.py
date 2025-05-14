@@ -1,11 +1,8 @@
 import streamlit as st
-from modules.ui.ui_backend import *
-from modules.ui.ui_backend import *
-from modules.retrieving.retrieving import *
-from modules.interface.logic import *
-
-
 import asyncio
+
+from frontend.interface.logic import render_query_results, run_query_pipeline
+from frontend.ui.ui_backend import sidebar_controls
 
 try:
     asyncio.get_running_loop()

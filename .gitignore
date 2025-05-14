@@ -7,4 +7,5 @@
 *splitted_docs
 *data
 *corpus
+*.duckdb
 *__pycache__

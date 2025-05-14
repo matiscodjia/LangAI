@@ -13,3 +13,9 @@ format:
 
 lint:
 	ruff .
+
+load_data:
+	python3 backend/loading_documents.py 
+
+run_app:
+	streamlit run frontend/web_app.py

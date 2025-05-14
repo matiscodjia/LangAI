@@ -1,17 +1,23 @@
 import logging
+import os
 from pathlib import Path
+from dotenv import load_dotenv
 import pandas as pd
 import spacy
 from langchain_ollama.llms import OllamaLLM
 
+# Charge les variables de .env
+load_dotenv()
 
+OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "llama3.2")
+OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
 class MetadataGenerator:
     """
     Generates metadata for a document using an LLM (for summary and theme)
     and optionally spaCy (for named entity extraction).
     """
 
-    def __init__(self, model_name: str = "llama3.2", spacy_model: str = "fr_core_news_sm"):
+    def __init__(self, model_name: str = OLLAMA_LLM_MODEL, spacy_model: str = "fr_core_news_sm"):
         self.chain = OllamaLLM(model=model_name)
         self.nlp = spacy.load(spacy_model)
 

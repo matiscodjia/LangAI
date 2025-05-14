@@ -1,22 +1,26 @@
 import logging
-from backend.RagCore.KnowledgeManagement.Indexing.duckdbManager import DuckDBManager, read_metadata_from_duckdb
+
+import duckdb
+from RagCore.KnowledgeManagement.Embedding.Embedder import ChromaEmbedderHF
+from RagCore.KnowledgeManagement.Indexing.duckdbManager import DuckDBManager
 
 from langchain_experimental.text_splitter import SemanticChunker
-from langchain_ollama import OllamaEmbeddings
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_text_splitters import CharacterTextSplitter
 
-EMBEDDING_MODEL = "nomic-embed-text"
-
 
 class DocumentSplitter:
-    def __init__(self, embedding_model: str = EMBEDDING_MODEL):
-        self.embedding_model = embedding_model
+    def __init__(self):
+        embedder = ChromaEmbedderHF()
+        self.embedding_model = embedder.embedding_model
 
     def load_data(self):
-        """Load texts and metadata from the DuckDB database."""
+        """Load texts and metadata from the DuckDB database (only unsplit)."""
         manager = DuckDBManager()
-        df = manager.read_metadata_from_duckdb()
+        con = duckdb.connect(manager.db_path)
+        df = con.execute("SELECT * FROM documents WHERE is_already_splitted = FALSE").fetchdf()
+        con.close()
+
         texts = df["texte"].tolist()
         metadata_list = df.drop(columns=["texte"]).to_dict(orient="records")
         return texts, metadata_list
@@ -26,8 +30,7 @@ class DocumentSplitter:
         if mode == "semantic":
             if not self.embedding_model:
                 raise ValueError("Embedding model is not defined.")
-            embeddings = OllamaEmbeddings(model=self.embedding_model)
-            return SemanticChunker(embeddings=embeddings)
+            return SemanticChunker(self.embedding_model)
 
         elif mode == "recursive":
             return RecursiveCharacterTextSplitter(
@@ -62,10 +65,17 @@ class DocumentSplitter:
                 documents.extend(docs)
             except Exception as e:
                 logging.error("Error during %s splitting: %s", mode, e)
+        manager = DuckDBManager()
+        con = duckdb.connect(manager.db_path)
 
+        for meta in metadatas:
+            source = meta.get("source", "")
+            con.execute("UPDATE documents SET is_already_splitted = TRUE WHERE source = ?", [source])
+
+        con.close()
         if verbose:
             print(f"Number of documents ({mode.capitalize()}): {len(documents)}")
-
+        
         return documents
 
     def split_semantic(self, verbose=True):

@@ -4,7 +4,8 @@ def sidebar_controls():
     with st.sidebar:
         st.header("🔧 Configuration")
 
-        collection = st.text_input("Collection Name", value="semantic")
+        collection = st.text_input("Collection Name", value="documents_collection")
+        visualization = st.text_input("Visualization method", value="pca")
         k = st.slider("Top K Results", 1, 20, 4)
 
         filter_key = st.text_input("Metadata Key (optional)")
@@ -22,6 +23,7 @@ def sidebar_controls():
         "top_k": k,
         "filter_key": filter_key,
         "filter_value": filter_value,
+        "visualization":visualization,
         "use_query_rewrite": use_query_rewrite,
         "use_multi_query": use_multi_query,
         "use_hyde": use_hyde,

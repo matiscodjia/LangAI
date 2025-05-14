@@ -37,12 +37,27 @@ store_documents(docs=docs_fixed, collection_name="fixed",path=CHROMA_PATH)
 
 
 """
+import os
 from RagCore.KnowledgeManagement.Indexing.duckdbManager import DuckDBManager
 from RagCore.Utils.pathProvider import PathProvider
+from RagCore.Utils.fileIndexBuilder import FileIndexBuilder
+from RagCore.KnowledgeManagement.Embedding.Embedder import ChromaEmbedderHF
+from RagCore.KnowledgeManagement.Indexing.documentSplitter import DocumentSplitter
 
-# Running pipeline
+## Workers declarations
+path_provider = PathProvider()
+duckdb_manager = DuckDBManager()
+index_builder = FileIndexBuilder(path_provider.raw_data())
+files = index_builder.build_index()
+documents_collection_embedder = ChromaEmbedderHF()
+splitter = DocumentSplitter()
 
-## Metadata + text storage in duckdb
-provider = PathProvider()
-duckDBManager = DuckDBManager()
-duckDBManager.process_text_file_to_duckdb(provider.raw_data("1881-01-11.txt"))
+## Store metadata + text  in Duck database
+for key, path in files.items():
+    print(f"{key} ➜ {path}")
+    duckdb_manager.text_file_to_duckdb(key+".txt")
+
+## Embed and store in chromaDB
+docs_semantic = splitter.split_semantic()
+documents_collection_embedder.store_documents(docs_semantic)
+

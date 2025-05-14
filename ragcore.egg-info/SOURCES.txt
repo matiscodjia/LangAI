@@ -1,8 +1,0 @@
-README.md
-pyproject.toml
-setup.py
-ragcore.egg-info/PKG-INFO
-ragcore.egg-info/SOURCES.txt
-ragcore.egg-info/dependency_links.txt
-ragcore.egg-info/requires.txt
-ragcore.egg-info/top_level.txt
