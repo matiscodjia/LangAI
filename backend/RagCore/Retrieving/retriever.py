@@ -30,6 +30,8 @@ load_dotenv()
 
 OLLAMA_LLM_MODEL = os.getenv("OLLAMA_LLM_MODEL", "llama3.2")
 OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+
+
 class RAGRetriever:
     def __init__(
         self,
@@ -42,15 +44,13 @@ class RAGRetriever:
         self.chroma = Chroma(
             collection_name=collection_name,
             embedding_function=self.embedder,
-            persist_directory=persist_path or str(provider.chroma())
+            persist_directory=persist_path or str(provider.chroma()),
         )
         self.retriever = self.chroma.as_retriever(search_kwargs={"k": 10})
 
     def get_qa_chain(self, k: int = 5) -> RetrievalQA:
         return RetrievalQA.from_chain_type(
-            llm=self.llm,
-            retriever=self.retriever,
-            return_source_documents=True
+            llm=self.llm, retriever=self.retriever, return_source_documents=True
         )
 
     def _rewrite_query(self, question: str) -> str:
@@ -63,7 +63,7 @@ class RAGRetriever:
         return [q.strip("- ") for q in output.strip().split("\n") if q.strip()]
 
     def _get_hypothetical_answer(self, question: str) -> str:
-        chain =  HYDE_PROMPT | self.llm
+        chain = HYDE_PROMPT | self.llm
         return chain.invoke(question)
 
     def _deduplicate_docs(self, docs: List[Document]) -> List[Document]:
@@ -78,9 +78,12 @@ class RAGRetriever:
 
     def _rerank(self, docs: List[Document], query: str) -> List[Document]:
         query_vec = self.embedder.embed_query(query)
-        scores = [np.dot(self.embedder.embed_query(doc.page_content), query_vec) for doc in docs]
+        scores = [
+            np.dot(self.embedder.embed_query(doc.page_content), query_vec)
+            for doc in docs
+        ]
         scored = sorted(zip(docs, scores), key=lambda x: x[1], reverse=True)
-        return scored #[doc for doc, _ in scored]
+        return scored  # [doc for doc, _ in scored]
 
     def retrieve(
         self,

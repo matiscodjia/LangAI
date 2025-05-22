@@ -1,63 +1,109 @@
-"""from RagCore.KnowledgeManagement.Indexing.reader import *
-from RagCore.KnowledgeManagement.Indexing.metadata_generator import *
-from RagCore.KnowledgeManagement.Embedding.store import *
-from RagCore.KnowledgeManagement.Indexing.splitter import *
+from pathlib import Path
+import yaml
+from regex import splititer
 
-## Il s'agit ici de mettre au point l'état initial de nos bases de données
-## (Base de texte et base de vecteurs)
-## Quel(s) texte à analyser et stocké en BD
-## Il faut choisir, quelle méthode de splitting à mettre en oeuvre etc.
+from backend.RagCore.KnowledgeManagement.Embedding.Embedder_bis import (
+    ChromaEmbedder,
+    get_embedder,
+)
+from backend.RagCore.KnowledgeManagement.Indexing.duckdbManager import DuckDBManager
+from backend.RagCore.KnowledgeManagement.Indexing.documentSplitter import (
+    DocumentSplitter,
+)
+from backend.RagCore.Utils.pathProvider import PathProvider
+from backend.RagCore.Utils.fileIndexBuilder import FileIndexBuilder
 
-###Charger les fichiers dans la base DuckDB (à réaliser une seule fois - offline)
-#Trouver la liste des fichiers à charger en db
-RAW_DATA_PATH="/Users/mtis/Local/Code/GitRepos/LangAI/data/raw_data"
-DUCKDB_PATH = "/Users/mtis/Local/Code/GitRepos/LangAI/data/metadata.duckdb"
-CHROMA_PATH = "/Users/mtis/Local/Code/GitRepos/LangAI/data/chroma_db"
-files = make_file_list(RAW_DATA_PATH)
-print(files)
 
-#On peut choisir d'échantillonner les documents en fonction des besoins.
 
-#Parcourir chaque fichier et en extraire les informations dans les méta données
+def load_config(config_path: Path) -> dict:
+    with open(config_path, "r", encoding="utf-8") as f:
+        return yaml.safe_load(f)
+    
 
-for key, value in files.items():
-   process_text_file_to_duckdb(value,DUCKDB_PATH)
-#Pour chaque document, splitter suivant les stratégies choisies (une seule fois -offline aussi)
+path_provider = PathProvider()
+path = path_provider.config_path()
+params= load_config(path)
+docs_splitter = DocumentSplitter(embedding_model=params["embedding_model"])
+duckdbManager = DuckDBManager()
 
-docs_semantic = semantic_split()
-docs_recursive = recursive_split()
-docs_fixed = base_split()
 
-#Vectoriser chaque groupe de documents dans une collection de la base
-#On pourra alors filtrer la récupération sur une collection en particulier (une seule fois)
+def vectorize_documents_by_model(
+    docs,
+    model_name: str,
+    chroma_path: Path,
+    collection_name: str = None,
+    device: str = "cpu",
+):
+    """
+    Vectorizes a list of documents using the specified embedding model.
+    The backend is determined manually via if-statements, allowing easy future extensions.
 
-store_documents(docs=docs_semantic, collection_name="semantic",path=CHROMA_PATH)
-store_documents(docs=docs_recursive, collection_name="recursive",path=CHROMA_PATH)
-store_documents(docs=docs_fixed, collection_name="fixed",path=CHROMA_PATH)
+    :param docs: List of LangChain Document objects
+    :param model_name: The embedding model name (e.g. HF or Ollama)
+    :param chroma_path: Path to Chroma persistent storage
+    :param collection_name: Optional collection name (defaults to backend-specific name)
+    :param device: 'cpu' or 'cuda'
+    """
+    print("Vectorizing started here")
+    if "sentence-transformers" in model_name or "all-MiniLM" in model_name:
+        backend = "hf"
+        collection = collection_name or "hf_collection"
+        print(f"⚙️  Vectorizing with HuggingFace model: {model_name}")
+    elif "nomic-embed-text" in model_name or "llama" in model_name:
+        backend = "ollama"
+        collection = collection_name or "ollama_collection"
+        print(f"⚙️  Vectorizing with Ollama model: {model_name}")
+    else:
+        raise ValueError(f"[❌] Unsupported or unknown model: {model_name}")
+
+    embedder = get_embedder(backend=backend, model_name=model_name, device=device)
+    chroma = ChromaEmbedder(
+        collection_name=collection, embedding_backend=embedder, persist_path=chroma_path
+    )
+    print("Vectorbase path --------->: "+str(chroma_path))
+    chroma.store_documents(docs)
 
 
 """
-import os
-from RagCore.KnowledgeManagement.Indexing.duckdbManager import DuckDBManager
-from RagCore.Utils.pathProvider import PathProvider
-from RagCore.Utils.fileIndexBuilder import FileIndexBuilder
-from RagCore.KnowledgeManagement.Embedding.Embedder import ChromaEmbedderHF
-from RagCore.KnowledgeManagement.Indexing.documentSplitter import DocumentSplitter
+# Test Ollama backend
+print("Test Ollama backend")
+ollama_embedder = get_embedder(backend="ollama", model_name="nomic-embed-text:latest")
+chroma_ollama = ChromaEmbedder(collection_name="test_ollama", embedding_backend=ollama_embedder, persist_path=Path("chroma_test_db"))
+chroma_ollama.store_documents(docs)
+"""
 
-## Workers declarations
-path_provider = PathProvider()
-duckdb_manager = DuckDBManager()
-index_builder = FileIndexBuilder(path_provider.raw_data())
-files = index_builder.build_index()
-documents_collection_embedder = ChromaEmbedderHF()
-splitter = DocumentSplitter()
 
-## Store metadata + text  in Duck database
-for key, path in files.items():
-    print(f"{key} ➜ {path}")
-    duckdb_manager.text_file_to_duckdb(key+".txt")
+def run_loading_pipeline(
+    data_source=path_provider.raw_data(),
+    chroma_path="",
+    chunking_strategy="",
+    export_split=True,
+    export_name="default",
+    embedding_model="nomic-embed-text:latest",
+    embedding_device_if_available="cpu",
+    collection_name="default",
+    advanced_metadatas=False,
+):
+    index_builder = FileIndexBuilder(data_source)
+    chroma_dir = path_provider.data(chroma_path)
+    files = index_builder.build_index()
+    for key, path in files.items():
+        print(f"{key} ➜ {path}")
+        duckdbManager.text_file_to_duckdb(key + ".txt", metadata=advanced_metadatas)
+    ## Embed and store in chromaDB
+    print("Splitting started here")
+    docs = docs_splitter.split(chunking_strategy)
+    if export_split:
+        print("exporting startingh here")
+        docs_splitter.export_documents_to_json(documents=docs, filename=export_name)
+    vectorize_documents_by_model(
+        docs=docs,
+        model_name=embedding_model,
+        chroma_path=chroma_dir,
+        collection_name=collection_name,
+        device=embedding_device_if_available,
+    )
 
-## Embed and store in chromaDB
-docs_semantic = splitter.split_semantic()
-documents_collection_embedder.store_documents(docs_semantic)
 
+
+run_loading_pipeline(**params)

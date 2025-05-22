@@ -6,7 +6,7 @@ from collections import defaultdict
 from pathlib import Path
 import pandas as pd
 
-from RagCore.KnowledgeManagement.Indexing.metadataGenerator import  MetadataGenerator
+from RagCore.KnowledgeManagement.Indexing.metadataGenerator import MetadataGenerator
 from RagCore.Utils.pathProvider import PathProvider
 
 
@@ -19,7 +19,6 @@ class DuckDBManager:
         self.provider = PathProvider()
         self.db_path = self.provider.metadata_db()
         self.metadata_gen = MetadataGenerator()
-        
 
     def read_metadata(self) -> pd.DataFrame:
         """
@@ -30,7 +29,8 @@ class DuckDBManager:
         df = con.execute("SELECT * FROM documents").fetchdf()
         con.close()
         return df
-    def text_file_to_duckdb(self, file_path: str):
+
+    def text_file_to_duckdb(self, file_path: str, metadata: bool):
         """
         Read a text file, extract metadata (summary, global theme),
         and store it into a DuckDB database — only if not already stored.
@@ -42,7 +42,7 @@ class DuckDBManager:
             raise FileNotFoundError(f"The file {file_path} does not exist.")
 
         # Extract date from filename
-        match = re.search(r'(\d{4}-\d{2}-\d{2})', file_path)
+        match = re.search(r"(\d{4}-\d{2}-\d{2})", file_path)
         file_date = match.group(1) if match else "unknown"
 
         # Check if already stored
@@ -65,10 +65,12 @@ class DuckDBManager:
             full_text = f.read()
 
         intro_text = "\n".join(full_text.splitlines()[:25])
-
+        summary = ""
+        global_theme = ""
         # LLM metadata generation
-        summary = self.metadata_gen.generate_summary(intro_text)
-        global_theme = self.metadata_gen.generate_global_theme(full_text)
+        if metadata:
+            summary = self.metadata_gen.generate_summary(intro_text)
+            global_theme = self.metadata_gen.generate_global_theme(full_text)
 
         metadata = {
             "source": file_date,
@@ -76,15 +78,16 @@ class DuckDBManager:
             "sommaire": summary,
             "theme_global": global_theme,
             "texte": full_text,
-            "is_already_splitted" : False
+            "is_already_splitted": False,
         }
 
         df = pd.DataFrame([metadata])
 
         # Store to DuckDB
-        con.execute("CREATE TABLE IF NOT EXISTS documents AS SELECT * FROM df WHERE 1=0")
+        con.execute(
+            "CREATE TABLE IF NOT EXISTS documents AS SELECT * FROM df WHERE 1=0"
+        )
         con.execute("INSERT INTO documents SELECT * FROM df")
         con.close()
 
         print(f"✅ Document '{file_date}' added to DuckDB.")
-        

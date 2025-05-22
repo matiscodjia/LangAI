@@ -13,17 +13,16 @@ from RagCore.Utils.pathProvider import PathProvider
 load_dotenv()
 
 OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
+
+
 class ChromaEmbedderHF:
     def __init__(
         self,
         collection_name: str = "documents_collection",
         model_name: str = OLLAMA_EMBEDDING_MODEL,
-        persist_path: str = None
+        persist_path: str = None,
     ):
         """
-        Initialize the ChromaEmbedder using HuggingFace's Inference API.
-        Requires a .env file with HUGGINGFACEHUB_API_TOKEN set.
-
         :param collection_name: Name of the ChromaDB collection.
         :param model_name: Hugging Face model name.
         :param persist_path: Custom path to ChromaDB folder (optional).
@@ -42,9 +41,13 @@ class ChromaEmbedderHF:
 
         :param docs: List of Document objects (page_content + metadata)
         """
-        print(f"📦 Storing {len(docs)} documents in collection '{self.collection.name}'")
+        print(
+            f"📦 Storing {len(docs)} documents in collection '{self.collection.name}'"
+        )
 
-        for idx, doc in enumerate(tqdm(docs, desc="Embedding & Storing", colour="green")):
+        for idx, doc in enumerate(
+            tqdm(docs, desc="Embedding & Storing", colour="green")
+        ):
             doc_id = f"{idx}"
             try:
                 embedding = self.embedding_model.embed_documents([doc.page_content])[0]

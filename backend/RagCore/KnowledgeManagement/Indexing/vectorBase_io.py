@@ -10,11 +10,15 @@ class ChromaManager:
         self.db_path = get_vector_base_path()
         self.db_path.mkdir(parents=True, exist_ok=True)
         self.client = chromadb.PersistentClient(path=str(self.db_path))
-        self.collection: Collection = self.client.get_or_create_collection(collection_name)
+        self.collection: Collection = self.client.get_or_create_collection(
+            collection_name
+        )
 
     def export_to_json(self, output_file: Path = Path("chroma_export.json")) -> None:
         """Export the entire Chroma collection to a JSON file."""
-        results = self.collection.get(include=["documents", "metadatas", "embeddings", "ids"])
+        results = self.collection.get(
+            include=["documents", "metadatas", "embeddings", "ids"]
+        )
 
         export_data = [
             {
@@ -45,10 +49,9 @@ class ChromaManager:
         embeddings = [item["embedding"] for item in data]
 
         self.collection.add(
-            ids=ids,
-            documents=documents,
-            metadatas=metadatas,
-            embeddings=embeddings
+            ids=ids, documents=documents, metadatas=metadatas, embeddings=embeddings
         )
 
-        print(f"✅ Import completed: {len(ids)} items added to collection '{self.collection.name}'")
+        print(
+            f"✅ Import completed: {len(ids)} items added to collection '{self.collection.name}'"
+        )

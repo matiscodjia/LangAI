@@ -8,11 +8,13 @@ from langchain.schema import Document
 
 embedding_model = OllamaEmbeddings(model="nomic-embed-text")
 
+
 def get_query_embedding(query: str) -> List[float]:
     """
     Transforme une requête en vecteur d'embedding.
     """
     return embedding_model.embed_query(query)
+
 
 def get_doc_embeddings(documents: List[Document]) -> List[List[float]]:
     """
@@ -20,6 +22,7 @@ def get_doc_embeddings(documents: List[Document]) -> List[List[float]]:
     Utilise uniquement le contenu du document.
     """
     return [embedding_model.embed_query(doc.page_content) for doc in documents]
+
 
 def visualize_embeddings(query_vec, doc_vecs):
     pca = PCA(n_components=2)
@@ -29,5 +32,3 @@ def visualize_embeddings(query_vec, doc_vecs):
     df["label"] = ["query"] + [f"doc_{i}" for i in range(len(doc_vecs))]
     fig = px.scatter(df, x="x", y="y", color="label", title="Embedding Visualization")
     return fig
-
-

@@ -11,6 +11,7 @@ except RuntimeError:
     asyncio.set_event_loop(loop)
 
 import os
+
 os.environ["STREAMLIT_WATCHFILE"] = "false"
 
 st.set_page_config(layout="wide")
@@ -25,6 +26,3 @@ run_button = st.button("Run")
 if run_button and query:
     result = run_query_pipeline(query, config)
     render_query_results(query, result, config)
-
-
-

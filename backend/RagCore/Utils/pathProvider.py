@@ -14,7 +14,9 @@ class PathProvider:
         for parent in [current] + list(current.parents):
             if (parent / "pyproject.toml").exists():
                 return parent
-        raise FileNotFoundError("Could not locate project root (pyproject.toml not found).")
+        raise FileNotFoundError(
+            "Could not locate project root (pyproject.toml not found)."
+        )
 
     def data(self, filename: str = "") -> Path:
         base = self.root / "data"
@@ -23,6 +25,14 @@ class PathProvider:
     def raw_data(self, filename: str = "") -> Path:
         base = self.data("raw_data")
         return base / filename if filename else base
+
+    def corpus_collections(self, filename: str = "") -> Path:
+        base = self.data("collections")
+        return base / filename if filename else base
+
+    def config_path(self, filename: str = None) -> Path:
+        default_filename = "config/default.yaml"
+        return self.root / (filename or default_filename)
 
     def metadatas(self, filename: str = "") -> Path:
         base = self.data("metadatas")
@@ -49,7 +59,8 @@ class PathProvider:
         if init_if_missing and not db_path.exists():
             print(f"[Init] Creating new DuckDB database at {db_path}")
             con = duckdb.connect(str(db_path))
-            con.execute("""
+            con.execute(
+                """
                 CREATE TABLE IF NOT EXISTS documents (
                     source TEXT,
                     date TEXT,
@@ -58,7 +69,8 @@ class PathProvider:
                     texte TEXT,
                     is_already_splitted BOOLEAN DEFAULT FALSE
                 )
-            """)
+            """
+            )
             con.close()
 
         return db_path

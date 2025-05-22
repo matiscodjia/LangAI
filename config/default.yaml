@@ -1,0 +1,10 @@
+data_source: data/raw_data
+chroma_path: chromaDB
+chunking_strategy: semantic
+export_split: true
+export_name: cs1_1881
+embedding_model: nomic-embed-text:latest
+embedding_device_if_available: cpu
+collection_name: hf_docs
+advanced_metadatas: true
+#sentence-transformers/all-MiniLM-L6-v2

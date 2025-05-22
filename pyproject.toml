@@ -17,8 +17,6 @@ dependencies = [
   "langchain-core==0.3.45",
   "langchain-text-splitters==0.3.6",
   "langsmith==0.3.15",
-
-  "spacy==3.8.4",
   "numpy==2.2.4",
   "tqdm==4.67.1",
   "PyYAML==6.0.2",

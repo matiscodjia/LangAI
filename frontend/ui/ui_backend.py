@@ -1,5 +1,6 @@
 import streamlit as st
 
+
 def sidebar_controls():
     with st.sidebar:
         st.header("🔧 Configuration")
@@ -23,9 +24,9 @@ def sidebar_controls():
         "top_k": k,
         "filter_key": filter_key,
         "filter_value": filter_value,
-        "visualization":visualization,
+        "visualization": visualization,
         "use_query_rewrite": use_query_rewrite,
         "use_multi_query": use_multi_query,
         "use_hyde": use_hyde,
-        "use_rerank": use_rerank
+        "use_rerank": use_rerank,
     }

@@ -22,9 +22,7 @@ os.makedirs(RESULTS_DIR, exist_ok=True)
 
 
 def run_query_pipeline(query: str, config: dict):
-    retriever = RAGRetriever(
-        collection_name=config["collection"]
-    )
+    retriever = RAGRetriever(collection_name=config["collection"])
 
     # 1. Retrieve
     docs = retriever.retrieve(
@@ -32,7 +30,7 @@ def run_query_pipeline(query: str, config: dict):
         use_rewrite=config["use_query_rewrite"],
         use_multi_query=config["use_multi_query"],
         use_hyde=config["use_hyde"],
-        top_k=config["top_k"]
+        top_k=config["top_k"],
     )
 
     # 2. Generate answer
@@ -43,25 +41,36 @@ def run_query_pipeline(query: str, config: dict):
     return {
         "source_documents": docs,  # [(doc, score)]
         "query_embedding": retriever.embedder.embed_query(query),
-        "doc_embeddings": [retriever.embedder.embed_query(doc.page_content) for doc, _ in docs],
+        "doc_embeddings": [
+            retriever.embedder.embed_query(doc.page_content) for doc, _ in docs
+        ],
         "similarity_scores": [score for _, score in docs],
-        "result": response
+        "result": response,
     }
 
 
-def visualize_embeddings(query_vec, doc_vecs, method="pca", n_components=2, scores=None):
+def visualize_embeddings(
+    query_vec, doc_vecs, method="pca", n_components=2, scores=None
+):
     all_vecs = np.vstack([query_vec] + doc_vecs)
     labels = ["query"] + [f"doc_{i}" for i in range(len(doc_vecs))]
 
     if method == "pca":
         pca = PCA(n_components=n_components)
         reduced = pca.fit_transform(all_vecs)
-        print(f"✅ PCA: {n_components} components explain {np.sum(pca.explained_variance_ratio_):.2f} variance")
+        print(
+            f"✅ PCA: {n_components} components explain {np.sum(pca.explained_variance_ratio_):.2f} variance"
+        )
 
     elif method == "tsne":
         n_samples = len(all_vecs)
         perplexity = min(30, max(2, n_samples - 1))
-        tsne = TSNE(n_components=n_components, perplexity=perplexity, learning_rate=200, random_state=42)
+        tsne = TSNE(
+            n_components=n_components,
+            perplexity=perplexity,
+            learning_rate=200,
+            random_state=42,
+        )
         reduced = tsne.fit_transform(all_vecs)
 
     else:
@@ -80,12 +89,10 @@ def visualize_embeddings(query_vec, doc_vecs, method="pca", n_components=2, scor
         hover_name="label",
         title=f"{method.upper()} Embedding Visualization",
         color_continuous_scale="Viridis",
-        size="score"
+        size="score",
     )
     fig.update_layout(
-        xaxis=dict(showgrid=True),
-        yaxis=dict(showgrid=True),
-        plot_bgcolor='white'
+        xaxis=dict(showgrid=True), yaxis=dict(showgrid=True), plot_bgcolor="white"
     )
     return fig
 
@@ -110,7 +117,7 @@ def save_evaluation(config: dict, query: str, rating: str, comment: str):
         "use_hyde": config["use_hyde"],
         "use_rerank": config["use_rerank"],
         "rating": rating,
-        "comment": comment
+        "comment": comment,
     }
     df = pd.DataFrame([data])
     filename = os.path.join(RESULTS_DIR, "evaluations_log.csv")
@@ -119,7 +126,9 @@ def save_evaluation(config: dict, query: str, rating: str, comment: str):
 
 def render_query_results(query, result, config):
     if not result["source_documents"]:
-        st.warning("❗ No documents were retrieved for this query with the selected filters.")
+        st.warning(
+            "❗ No documents were retrieved for this query with the selected filters."
+        )
         return
 
     st.markdown("## 🧠 Generated Answer")
@@ -136,7 +145,7 @@ def render_query_results(query, result, config):
             query_vec=result["query_embedding"],
             doc_vecs=result["doc_embeddings"],
             method=config["visualization"],
-            scores=result["similarity_scores"]
+            scores=result["similarity_scores"],
         )
         st.plotly_chart(fig, use_container_width=True)
 
@@ -157,22 +166,22 @@ def render_query_results(query, result, config):
         "How relevant was the answer?",
         ["Not at all", "Somewhat", "Mostly", "Perfect"],
         key="rating",
-        on_change=update_rating
+        on_change=update_rating,
     )
 
-    st.text_area(
-        "Comments or observations",
-        key="comment",
-        on_change=update_comment
-    )
+    st.text_area("Comments or observations", key="comment", on_change=update_comment)
 
     if st.button("Submit Evaluation"):
         if "last_query" in st.session_state and "last_config" in st.session_state:
             save_evaluation(
                 config=st.session_state["last_config"],
                 query=st.session_state["last_query"],
-                rating=st.session_state.get("rating_selected", st.session_state["rating"]),
-                comment=st.session_state.get("comment_written", st.session_state["comment"])
+                rating=st.session_state.get(
+                    "rating_selected", st.session_state["rating"]
+                ),
+                comment=st.session_state.get(
+                    "comment_written", st.session_state["comment"]
+                ),
             )
             st.success("✅ Evaluation saved.")
         else:
