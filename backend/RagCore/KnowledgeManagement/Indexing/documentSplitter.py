@@ -8,11 +8,11 @@ from langchain_text_splitters import (
 from langchain.schema import Document
 import duckdb
 import logging
-from RagCore.KnowledgeManagement.Indexing.duckdbManager import DuckDBManager
-from RagCore.KnowledgeManagement.Embedding.Embedder_bis import get_embedder
+from backend.RagCore.KnowledgeManagement.Indexing.duckdbManager import DuckDBManager
+from backend.RagCore.KnowledgeManagement.Embedding.Embedder_bis import get_embedder
 from langchain_experimental.text_splitter import SemanticChunker
 
-from RagCore.Utils.pathProvider import PathProvider
+from backend.RagCore.Utils.pathProvider import PathProvider
 from typing import List
 
 path_provider = PathProvider()
@@ -31,10 +31,7 @@ def chunking_strategy_0_splitter(chunk_size):
 
 def chunking_strategy_1_splitter():
     return RecursiveCharacterTextSplitter(
-        separators=[
-            "\n+[a-z]{0,2}[A-ZÉÈÀÊÔ \-'0-9\—\.]{8,}?.*\n",
-            "[0-9\-\—\. ]{3,}[a-z\&'\&]*[A-ZÉÈÊÀÔ\-\.\—\°\:\; ']{10,}.*\n*",
-        ],
+        separators=['\n+[a-z]{0,2}[A-ZÉÈÀÊÔ \-\'0-9\—\.]{8,}?.*\n',"[0-9\-\—\. ]{3,}[a-z\&\'\&]*[A-ZÉÈÊÀÔ\-\.\—\°\:\; ']{10,}.*\n*"],
         chunk_size=1,
         chunk_overlap=1,
         length_function=len,
@@ -76,16 +73,13 @@ class DualPassSplitter(RecursiveCharacterTextSplitter):
     def create_documents_from_documents(
         self, documents: list[Document], metadata: dict
     ) -> list[Document]:
-        """Applique le split secondaire sur les chunks déjà splittés."""
         texts = [doc.page_content for doc in documents]
         return super().create_documents(texts, metadatas=[metadata] * len(texts))
 
 
 class DocumentSplitter:
     def __init__(self,embedding_model):
-        print("Init model")
         self.embedding_model = OllamaEmbeddings(model=embedding_model)
-        print("Init end")
 
     def load_data(self):
         manager = DuckDBManager()
@@ -108,15 +102,10 @@ class DocumentSplitter:
             return RecursiveCharacterTextSplitter(
                 chunk_size=1500, chunk_overlap=200, separators=["\n\n", "\n", " "]
             )
-
-        elif mode == "token":
-            return CharacterTextSplitter.from_tiktoken_encoder(
-                encoding_name="cl100k_base", chunk_size=1500
-            )
-
         elif mode == "strategy_0":
             return chunking_strategy_0_splitter(chunk_size=1000)
         elif mode == "strategy_1":
+            print("Strategy 1")
             return chunking_strategy_1_splitter()
         elif mode == "strategy_2":
             return DualPassSplitter(
@@ -168,16 +157,12 @@ class DocumentSplitter:
         raise ValueError(f"Unknown splitting mode: {mode}")
 
     def split(self, mode: str = "semantic", verbose: bool = True):
-        print("Enter into splitting")
         texts, metadatas = self.load_data()
         documents = []
         splitter = self._get_splitter(mode)
         for text, meta in zip(texts, metadatas):
             try:
-                print("Trying split")
-                print("Create doc")
                 docs = splitter.create_documents([text], metadatas=[meta])
-                print("End create documents")
                 documents.extend(docs)
             except Exception as e:
                 logging.error("Error during %s splitting: %s", mode, e)
@@ -185,7 +170,6 @@ class DocumentSplitter:
         manager = DuckDBManager()
         con = duckdb.connect(manager.db_path)
         for meta in metadatas:
-            print("Truing in database")
             source = meta.get("source", "")
             con.execute(
                 "UPDATE documents SET is_already_splitted = TRUE WHERE source = ?",
@@ -198,40 +182,12 @@ class DocumentSplitter:
 
         return documents
 
-    def split_semantic(self, verbose=True):
-        return self.split(mode="semantic", verbose=verbose)
-
-    def split_recursive(self, verbose=True):
-        return self.split(mode="recursive", verbose=verbose)
-
-    def split_token(self, verbose=True):
-        return self.split(mode="token", verbose=verbose)
-
-    def split_strategy_0(self, verbose=True):
-        return self.split(mode="strategy_0", verbose=verbose)
-
-    def split_strategy_1(self, verbose=True):
-        return self.split(mode="strategy_1", verbose=verbose)
-
-    def split_strategy_2(self, verbose=True):
-        return self.split(mode="strategy_2", verbose=verbose)
-
-    def split_strategy_3(self, verbose=True):
-        return self.split(mode="strategy_3", verbose=verbose)
-
-    def split_strategy_4(self, verbose=True):
-        return self.split(mode="strategy_4", verbose=verbose)
-
-    def split_strategy_pp(self, verbose=True):
-        return self.split(mode="strategy_pp", verbose=verbose)
-
     def export_documents_to_json(
         self,
         documents: List[Document],
         filename: str,
         output_dir=path_provider.corpus_collections(),
     ):
-        # Ajoute .json si absent
 
         filename += ".json"
 

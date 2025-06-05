@@ -33,6 +33,8 @@ def vectorize_documents_by_model(
     chroma_path: Path,
     collection_name: str = None,
     device: str = "cpu",
+    progress_callback=None,
+    use_tqdm=False
 ):
     """
     Vectorizes a list of documents using the specified embedding model.
@@ -61,7 +63,7 @@ def vectorize_documents_by_model(
         collection_name=collection, embedding_backend=embedder, persist_path=chroma_path
     )
     print("Vectorbase path --------->: "+str(chroma_path))
-    chroma.store_documents(docs)
+    chroma.store_documents(docs,progress_callback,use_tqdm=use_tqdm)
 
 
 """
@@ -83,6 +85,8 @@ def run_loading_pipeline(
     embedding_device_if_available="cpu",
     collection_name="default",
     advanced_metadatas=False,
+    progress_callback=None,
+    use_tqdm=False
 ):
     index_builder = FileIndexBuilder(data_source)
     chroma_dir = path_provider.data(chroma_path)
@@ -102,8 +106,11 @@ def run_loading_pipeline(
         chroma_path=chroma_dir,
         collection_name=collection_name,
         device=embedding_device_if_available,
+        progress_callback=progress_callback,
+        use_tqdm=use_tqdm
+
     )
 
 
 
-run_loading_pipeline(**params)
+#run_loading_pipeline(**params)

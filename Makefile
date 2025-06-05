@@ -21,4 +21,4 @@ load_data:
 	python3 backend/loading_documents.py 
 
 run_app:
-	.venv/bin/streamlit run frontend/web_app.py
+	.venv/bin/streamlit run new_app.py

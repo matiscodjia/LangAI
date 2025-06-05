@@ -8,7 +8,7 @@ from langchain_ollama import OllamaEmbeddings
 from langchain.schema import Document
 from chromadb import PersistentClient
 
-from RagCore.Utils.pathProvider import PathProvider
+from backend.RagCore.Utils.pathProvider import PathProvider
 
 load_dotenv()
 

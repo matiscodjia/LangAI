@@ -6,8 +6,8 @@ from collections import defaultdict
 from pathlib import Path
 import pandas as pd
 
-from RagCore.KnowledgeManagement.Indexing.metadataGenerator import MetadataGenerator
-from RagCore.Utils.pathProvider import PathProvider
+from backend.RagCore.KnowledgeManagement.Indexing.metadataGenerator import MetadataGenerator
+from backend.RagCore.Utils.pathProvider import PathProvider
 
 
 class DuckDBManager:
