@@ -18,7 +18,7 @@ lint:
 	ruff .
 
 load_data:
-	python3 backend/loading_documents.py 
+	python3 frontend/loading_documents.py
 
 run_app:
-	.venv/bin/streamlit run new_app.py
+	.venv/bin/streamlit run frontend/new_app.py

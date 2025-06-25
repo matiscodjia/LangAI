@@ -1,0 +1,102 @@
+# RAG System Configuration Template
+
+# Document Processing Configuration
+document_processing:
+  # Chunking strategy for document splitting
+  chunking_strategy: strategy_1
+  # Whether to export split documents to JSON
+  export_split: true
+  # Name of the export file (without extension)
+  export_name: default
+  # Path to the raw data directory
+  path: "data"
+  # Whether to generate advanced metadata
+  advanced_metadatas: false
+
+# Embedding Configuration
+embedding:
+  # Name of the embedding model to use
+  model_name: antoinelouis/french-gte-multilingual-base
+  # Device to use for embedding (cpu or cuda)
+  device: cpu
+  # Whether to trust remote code when loading the model
+  trust_remote_code: true
+  # Whether to normalize embeddings
+  normalize_embeddings: true
+  # Batch size for embedding
+  batch_size: 3
+
+# ChromaDB Configuration
+chromadb:
+  # Name of the collection to use
+  collection_name: default
+  # Path to the ChromaDB directory (relative to data directory)
+  path: chroma
+  # Space to use for HNSW index
+  hnsw_space: cosine
+
+# Retrieval Configuration
+retrieval:
+  # Default number of documents to retrieve
+  top_k: 4
+  # Whether to use query rewriting
+  use_query_rewrite: true
+  # Whether to use multi-query generation
+  use_multi_query: true
+  # Whether to use hypothetical document embedding
+  use_hyde: true
+  # Whether to use reranking
+  use_rerank: true
+  # Prompt templates for query augmentation
+  prompts:
+    rewrite: "Réécris cette question de façon plus précise pour interroger une base documentaire : {question}"
+    multi_query: "Génère 3 reformulations différentes mais pertinentes de la question suivante : {question}"
+    hyde: "Imagine une réponse hypothétique à cette question dans une limite stricte de 15 lignes: {question}"
+
+# Generation Configuration
+generation:
+  # Default model to use for generation
+  model: llama3.2:latest
+  # System prompt for generation
+  system_prompt: |
+    Tu es un assistant utile qui répond aux questions en te basant sur le contexte fourni.
+    
+    Si la réponse ne se trouve pas dans le contexte, réponds : 
+    « Je n'ai pas assez d'informations pour répondre à cette question. »
+  # Template for the QA prompt
+  qa_prompt_template: "<s>[INST] {system_prompt}\n\nContexte :\n{context}\n\nQuestion : {question} [/INST]"
+
+# Visualization Configuration
+visualization:
+  # Method to use for visualization (pca, tsne, umap)
+  method: pca
+  # Number of components to use for dimensionality reduction
+  n_components: 2
+  # Random seed for reproducibility
+  random_seed: 42
+  # Learning rate for t-SNE
+  tsne_learning_rate: 200
+  # Perplexity for t-SNE (0 for auto)
+  tsne_perplexity: 0
+
+# UI Configuration
+ui:
+  # Available chunking strategies
+  chunking_strategies:
+    - semantic
+    - strategy_0
+    - strategy_1
+    - strategy_2
+    - strategy_3
+    - strategy_4
+    - strategy_pp
+  # Available embedding models
+  embedding_models:
+    - nomic-embed-text:latest
+    - sentence-transformers/all-MiniLM-L6-v2
+    - sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+  # Available generation models
+  generation_models:
+    - deepseek-r1:7b
+    - mistral:latest
+    - llama3.2:latest

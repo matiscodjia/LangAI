@@ -1,20 +1,22 @@
 import os
-import random
 import re
 import duckdb
-from collections import defaultdict
-from pathlib import Path
 import pandas as pd
+import logging
 
-from backend.RagCore.KnowledgeManagement.Indexing.metadataGenerator import MetadataGenerator
+from backend.RagCore.Indexing.metadataGenerator import MetadataGenerator
+from backend.RagCore.Utils.configManager import ConfigManager
 from backend.RagCore.Utils.pathProvider import PathProvider
+
+# Setup logger
+log = logging.getLogger("DuckDBManager")
+logging.basicConfig(level=logging.INFO, format="%(message)s")
 
 
 class DuckDBManager:
     def __init__(self):
         """
         Initialize the metadata reader with the path to the DuckDB database.
-        If not provided, it uses the default project metadata path.
         """
         self.provider = PathProvider()
         self.db_path = self.provider.metadata_db()
@@ -30,64 +32,62 @@ class DuckDBManager:
         con.close()
         return df
 
-    def text_file_to_duckdb(self, file_path: str, metadata: bool):
+    def text_file_to_duckdb(self, file_path: str) -> None:
         """
-        Read a text file, extract metadata (summary, global theme),
-        and store it into a DuckDB database — only if not already stored.
+        Read a text file, extract metadata, and store it into DuckDB
+        (if not already stored).
         """
         file_path = str(self.provider.raw_data(file_path))
-        duckdb_file = self.db_path
 
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"The file {file_path} does not exist.")
 
-        # Extract date from filename
         match = re.search(r"(\d{4}-\d{2}-\d{2})", file_path)
         file_date = match.group(1) if match else "unknown"
 
-        # Check if already stored
-        con = duckdb.connect(duckdb_file)
+        con = duckdb.connect(self.db_path)
         try:
             result = con.execute(
                 "SELECT COUNT(*) FROM documents WHERE source = ?", [file_date]
             ).fetchone()[0]
 
             if result > 0:
-                print(f"⚠️ Skipped: document '{file_date}' already in DuckDB.")
+                log.warning(f"Skipped: document '{file_date}' already in DuckDB.")
                 con.close()
                 return
         except duckdb.CatalogException:
-            # Table doesn't exist yet → continue
-            pass
+            log.info("Table 'documents' does not exist yet — creating new one.")
 
-        # Read full text
         with open(file_path, "r", encoding="utf-8") as f:
             full_text = f.read()
 
         intro_text = "\n".join(full_text.splitlines()[:25])
         summary = ""
         global_theme = ""
-        # LLM metadata generation
-        if metadata:
-            summary = self.metadata_gen.generate_summary(intro_text)
-            global_theme = self.metadata_gen.generate_global_theme(full_text)
+
+        config_manager = ConfigManager()
+        if config_manager.get_advanced_metadata():
+            try:
+                summary = self.metadata_gen.generate_summary(intro_text)
+            except Exception as e:
+                log.error(f"Error generating summary: {e}")
+
+            try:
+                global_theme = self.metadata_gen.generate_global_theme(full_text)
+            except Exception as e:
+                log.error(f"Error generating global theme: {e}")
 
         metadata = {
             "source": file_date,
             "date": file_date,
             "sommaire": summary,
             "theme_global": global_theme,
-            "texte": full_text,
-            "is_already_splitted": False,
+            "texte": full_text
         }
 
         df = pd.DataFrame([metadata])
-
-        # Store to DuckDB
-        con.execute(
-            "CREATE TABLE IF NOT EXISTS documents AS SELECT * FROM df WHERE 1=0"
-        )
+        con.register("df", df)
         con.execute("INSERT INTO documents SELECT * FROM df")
         con.close()
 
-        print(f"✅ Document '{file_date}' added to DuckDB.")
+        log.info(f"Document '{file_date}' added to DuckDB.")

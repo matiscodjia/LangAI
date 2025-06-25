@@ -1,151 +1,167 @@
-from langchain_chroma import Chroma
-from langchain.chains import RetrievalQA, LLMChain
+from typing import List
 from langchain.prompts import PromptTemplate
 from langchain.schema import Document
-from langchain.llms.base import LLM
-from langchain_ollama import OllamaLLM, OllamaEmbeddings
-from typing import List, Optional
+from langchain.prompts import PromptTemplate
+
+from numpy.linalg import norm
+from statistics import mean
 import numpy as np
-from typing import List, Tuple
-from backend.RagCore.Utils.pathProvider import PathProvider
 import logging
+from backend.RagCore.Utils.configManager import ConfigManager
 
 # Setup logger
 logging.basicConfig(level=logging.INFO, format="%(message)s")
 log = logging.getLogger("RAGRetriever")
 
-# Prompt templates
-REWRITE_PROMPT = PromptTemplate.from_template(
-    "Réécris cette question de façon plus précise pour interroger une base documentaire : {question}"
-)
+# Cosine similarity function
+def cosine_similarity(u, v):
+    return np.dot(u, v) / (norm(u) * norm(v) + 1e-10)
 
-MULTI_QUERY_PROMPT = PromptTemplate.from_template(
-    "Génère 3 reformulations différentes mais pertinentes de la question suivante : {question}"
-)
+def _deduplicate_docs(docs: list[Document]) -> list[Document]:
+    log.info(f"Deduplicating {len(docs)} documents...")
+    seen = set()
+    unique = []
+    for doc in docs:
+        key = doc.page_content.strip()[:100]
+        if key not in seen:
+            seen.add(key)
+            unique.append(doc)
+    log.info(f"{len(unique)} unique documents retained.")
+    return unique
 
-HYDE_PROMPT = PromptTemplate.from_template(
-    "Imagine une réponse hypothétique à cette question dans une limite stricte de 15 lignes: {question}"
-)
-
-import os
-from dotenv import load_dotenv
-
-# Charge les variables de .env
-load_dotenv()
-
-OLLAMA_EMBEDDING_MODEL = os.getenv("OLLAMA_EMBEDDING_MODEL", "nomic-embed-text")
-
+def _rerank(docs: list[tuple[Document, float]], query: str) -> list[tuple[Document, float]]:
+    log.info(f"[RERANK] Reranker not implemented — passing original scores.")
+    return docs
 
 class RAGRetriever:
-    def __init__(
-        self,
-        collection_name: str,
-        persist_path: Optional[str] = None,
-        gen_model=None
-    ):
-        self.llm: LLM = OllamaLLM(model=gen_model)
-        self.embedder = OllamaEmbeddings(model=OLLAMA_EMBEDDING_MODEL)
-        provider = PathProvider()
-        self.chroma = Chroma(
-            collection_name=collection_name,
-            embedding_function=self.embedder,
-            persist_directory=persist_path or str(provider.chroma()),
-        )
-        self.retriever = self.chroma.as_retriever(search_kwargs={"k": 10})
-        log.info(f"📚 Chroma retriever initialized with collection: {collection_name}")
+    def __init__(self):
+        self.config = ConfigManager()
 
-    def get_qa_chain(self, k: int = 5) -> RetrievalQA:
-        return RetrievalQA.from_chain_type(
-            llm=self.llm, retriever=self.retriever, return_source_documents=True
-        )
+        # Load Chroma
+        self.chroma = self.config.get_chroma_base()
 
-    def _rewrite_query(self, question: str) -> str:
-        log.info(f"✍️ Rewriting question: {question}")
-        chain = REWRITE_PROMPT | self.llm
-        rewritten = chain.invoke(question)
-        log.info(f"🔁 Rewritten: {rewritten.strip()}")
-        return rewritten.strip()
+        #Load embedder
+        self.embedder = self.config.get_embedder()
+        self.llm = self.config.get_llm_provider()
+        self.prompts = self.config.get_retrieval_prompts()
+        self.prompt_rewrite     = PromptTemplate.from_template(self.prompts["rewrite"])
+        self.prompt_multi_query = PromptTemplate.from_template(self.prompts["multi_query"])
+        self.prompt_hyde        = PromptTemplate.from_template(self.prompts["hyde"])
 
-    def _get_multi_queries(self, question: str) -> List[str]:
-        log.info(f"🔀 Generating multi-queries for: {question}")
-        chain = MULTI_QUERY_PROMPT | self.llm
-        output = chain.invoke(question)
-        queries = [q.strip("- ") for q in output.strip().split("\n") if q.strip()]
-        log.info(f"📌 Reformulations: {queries}")
+        self.eval_mode = self.config.get_eval_mode()
+        self.eval_info = {}
+        
+        if self.eval_mode:
+            log.info("Evaluation mode enabled")
+        log.info("RAGRetriever initialized.")
+
+    def _prepare_queries(self, question: str) -> list[str]:
+        queries = [question]
+
+        if self.config.get_use_query_rewriting():
+            rewritten = self._rewrite_query(question)
+            queries = [rewritten]
+            log.info(f"→ Rewritten: {rewritten}")
+
+        if self.config.get_use_multi_queries():
+            multi = self._get_multi_queries(queries[0])
+            queries += multi
+            log.info(f"→ Reformulations: {multi}")
+
         return queries
 
+    def _rewrite_query(self, question: str) -> str:
+        tpl = self.prompt_rewrite.format(question=question)
+        output = self.llm.invoke(tpl)
+        return getattr(output, "content", str(output)).strip()
+
+    def _get_multi_queries(self, question: str) -> List[str]:
+        tpl = self.prompt_multi_query.format(question=question)
+        output = self.llm.invoke(tpl)
+        text = getattr(output, "content", str(output))
+        return [q.strip("- ").strip() for q in text.splitlines() if q.strip()]
+
     def _get_hypothetical_answer(self, question: str) -> str:
-        log.info(f"💭 Generating hypothetical answer for: {question}")
-        chain = HYDE_PROMPT | self.llm
-        hypo = chain.invoke(question).strip()
-        log.info(f"🧠 Hypothetical answer: {hypo}")
-        return hypo
+        tpl = self.prompt_hyde.format(question=question)
+        output = self.llm.invoke(tpl)
+        return getattr(output, "content", str(output)).strip()
 
-    def _deduplicate_docs(self, docs: List[Document]) -> List[Document]:
-        log.info(f"🧹 Deduplicating {len(docs)} documents...")
-        seen = set()
-        unique = []
-        for doc in docs:
-            key = doc.page_content.strip()[:100]
-            if key not in seen:
-                seen.add(key)
-                unique.append(doc)
-        log.info(f"✅ {len(unique)} unique documents retained.")
-        return unique
+    def _search_from_query(self, question: str, top_k: int) -> list[Document]:
+        queries = self._prepare_queries(question)
+        all_docs: list[Document] = []
 
-    def _rerank(self, docs: List[Tuple[Document, float]], query: str) -> List[Tuple[Document, float]]:
-        log.info(f"⚠️  [RERANK] Reranker not implemented — passing original scores.")
-        return docs
+        use_hyde = self.config.get_use_hyde()
+        for q in queries:
+            vec_input = self._get_hypothetical_answer(q) if use_hyde else q
+            embedding = self.embedder.embed_query(vec_input)
 
-    def retrieve(
-        self,
-        question: str,
-        use_rewrite: bool = True,
-        use_multi_query: bool = True,
-        use_hyde: bool = True,
-        use_rerank: bool = True,
-        top_k: int = 5,
-    ) -> List[Tuple[Document, float]]:
-        log.info(f"\n🔎 Query received: {question}")
-        queries = [question]
-        
-        if use_rewrite:
-            queries[0] = self._rewrite_query(question)
+            # appelle la méthode low-level de ChromaDB
+            result = self.chroma.query(
+                query_embeddings=[embedding],
+                n_results=top_k,
+                include=["documents", "metadatas", "distances"]
+            )
+            # result["documents"][0] est la liste de chaînes de caractères
+            docs = [
+                Document(page_content=doc_text, metadata=meta)
+                for doc_text, meta in zip(
+                    result["documents"][0],
+                    result["metadatas"][0],
+                )
+            ]
+            all_docs.extend(docs)
+            log.info(f"→ Retrieved {len(docs)} docs for: {q}")
 
-        if use_multi_query:
-            queries.extend(self._get_multi_queries(queries[0]))
+        # dédoublonne tes Document
+        return _deduplicate_docs(all_docs)
 
-        log.info(f"🔍 Final list of queries to search: {queries}")
-
-        all_docs = []
-        if use_hyde:
-            log.info(f"🧪 Using HyDE for document retrieval.")
-            for q in queries:
-                hypo = self._get_hypothetical_answer(q)
-                hypo_embedding = self.embedder.embed_query(hypo)
-                hyde_docs = self.chroma.similarity_search_by_vector(hypo_embedding, k=top_k)
-                log.info(f"🔹 Retrieved {len(hyde_docs)} docs for HyDE on: {q}")
-                all_docs.extend(hyde_docs)
-        else:
-            log.info(f"📥 Retrieving documents using direct similarity search.")
-            for q in queries:
-                docs = self.retriever.invoke(q)
-                log.info(f"🔹 Retrieved {len(docs)} docs for query: {q}")
-                all_docs.extend(docs)
-
-        cleaned_docs = self._deduplicate_docs(all_docs)
-
-        log.info(f"📐 Computing similarity scores for {len(cleaned_docs)} documents...")
+    def retrieve(self, question: str) -> list[tuple[Document, float]]:
+        top_k = self.config.get_top_k()
+        docs = self._search_from_query(question, top_k)
         query_vec = self.embedder.embed_query(question)
-        scored = [
-            (doc, np.dot(self.embedder.embed_query(doc.page_content), query_vec))
-            for doc in cleaned_docs
+
+        results = [
+            (doc, cosine_similarity(self.embedder.embed_query(doc.page_content), query_vec))
+            for doc in docs
         ]
+        sorted_results = sorted(results, key=lambda x: x[1], reverse=True)[:top_k]
 
-        if use_rerank:
-            log.info(f"🔄 Passing through reranker (currently identity function).")
-            reranked = self._rerank(scored, question)
-            return reranked[:top_k]
+        if self.eval_mode:
+            scores = [s for _, s in sorted_results]
+            self.eval_info = {
+                "mean_score": mean(scores) if scores else 0.0,
+                "top1_score": scores[0] if scores else None,
+                "top_k": top_k
+            }
 
-        log.info(f"📤 Returning top-{top_k} scored documents without reranking.")
-        return scored[:top_k]
+        return sorted_results
+
+    def answer(self, question: str) -> str:
+        log.info(f"Question posée : {question} ")
+        docs = self.retrieve(question)
+        if not docs:
+            return "No relevant information found in the document database."
+
+        context = "\n\n".join(doc.page_content for doc, _ in docs)
+        gen_cfg = self.config.get_generation_params()
+        
+        if self.eval_mode:
+            self.eval_info.update({
+                "context_length_chars": len(context),
+                "temperature": gen_cfg["temperature"],
+                "gen_model": gen_cfg["model"],
+                "provider": gen_cfg["provider"],
+                "embedding_model": self.embedder.model_name
+            })
+
+        prompt = PromptTemplate.from_template(
+            gen_cfg["qa_prompt_template"] or
+            "<s>[INST] {system_prompt}\n\nContexte :\n{context}\n\nQuestion : {question} [/INST]"
+        ).format(
+            system_prompt=gen_cfg["system_prompt"],
+            context=context,
+            question=question
+        )
+
+        response = self.llm.invoke(prompt)
+        return getattr(response, "content", str(response)).strip()

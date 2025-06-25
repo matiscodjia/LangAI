@@ -23,8 +23,9 @@ class PathProvider:
         return base / filename if filename else base
 
     def raw_data(self, filename: str = "") -> Path:
-        base = self.data("raw_data")
-        return base / filename if filename else base
+        base = self.data("raw_data/ordered_corpus")
+
+        return base /filename if filename else base
 
     def corpus_collections(self, filename: str = "") -> Path:
         base = self.data("collections")
@@ -66,8 +67,7 @@ class PathProvider:
                     date TEXT,
                     sommaire TEXT,
                     theme_global TEXT,
-                    texte TEXT,
-                    is_already_splitted BOOLEAN DEFAULT FALSE
+                    texte TEXT
                 )
             """
             )
