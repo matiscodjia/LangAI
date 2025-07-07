@@ -106,8 +106,8 @@ def export_documents_to_json(
 
 
 class DocumentSplitter:
-    def __init__(self,bi_encoder=None):
-        self.embedding_model = bi_encoder
+    def __init__(self, ):
+        self.embedding_model = ConfigManager().get_embedder()
 
     def _get_splitter(self, mode: str):
         if mode == "semantic":

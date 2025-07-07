@@ -37,7 +37,8 @@ def page_home():
 # --- PAGE : RECHERCHE (RAG) ---
 def page_rag():
     st.header("Recherche (RAG)")
-    config = sidebar_controls()
+    config = ConfigManager()  # ← ajout de cette ligne
+    sidebar_controls(config)
     query = st.text_input("Entrez la question à poser au RAG")
     run_button = st.button("Lancer la recherche")
     model = st.selectbox(
@@ -45,15 +46,14 @@ def page_rag():
         options=config_manager.get("ui.generation_models", []),
     )
     if run_button and query:
-        result = run_query_pipeline(query, config, model)
-        render_query_results(result, config)
+        result = run_query_pipeline(query)
+        render_query_results(result)
 
 # --- PAGE : INDEXATION ---
 def page_indexation():
     st.header("Indexation & Vectorisation")
 
     doc_cfg = config_manager.get_document_processing_config()
-    emb_cfg = config_manager.get_embedding_config()
     chroma_cfg = config_manager.get_chromadb_config()
     ui_cfg = config_manager.get_ui_config()
 
@@ -80,6 +80,8 @@ def page_indexation():
     collection_name = st.text_input("Nom de la collection", value=chroma_cfg.get("collection_name", "default"))
     advanced_metadatas = st.checkbox("Métadonnées avancées", value=doc_cfg.get("advanced_metadatas", False))
 
+    override_config = st.checkbox("Remplacer la configuration YAML par les paramètres manuels")
+
     if st.button("Lancer l’indexation"):
         progress_bar = st.progress(0)
         status_text = st.empty()
@@ -103,7 +105,10 @@ def page_indexation():
         st.info("Lancement de la pipeline...")
         with st.spinner("Traitement en cours..."):
             try:
-                run_loading_pipeline(**pipeline_params)
+                if override_config:
+                    run_loading_pipeline(config=config_manager, config_overrides=pipeline_params)
+                else:
+                    run_loading_pipeline(config=config_manager)
                 st.success("Indexation terminée avec succès !")
             except Exception as e:
                 log.error(f"Erreur pendant l’indexation : {e}")

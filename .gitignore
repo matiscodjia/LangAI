@@ -2,7 +2,6 @@
 *.idea
 *.venv
 *.DS_Store
-*.pdf
 *.txt
 *chroma_langchain_db
 *splitted_docs

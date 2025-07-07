@@ -2,6 +2,7 @@ from typing import List
 from langchain.prompts import PromptTemplate
 from langchain.schema import Document
 from langchain.prompts import PromptTemplate
+import tiktoken
 
 from numpy.linalg import norm
 from statistics import mean
@@ -47,8 +48,8 @@ class RAGRetriever:
         self.prompt_rewrite     = PromptTemplate.from_template(self.prompts["rewrite"])
         self.prompt_multi_query = PromptTemplate.from_template(self.prompts["multi_query"])
         self.prompt_hyde        = PromptTemplate.from_template(self.prompts["hyde"])
-
         self.eval_mode = self.config.get_eval_mode()
+        self.cs = self.config.get_chunking_strategy()
         self.eval_info = {}
         
         if self.eval_mode:
@@ -125,34 +126,28 @@ class RAGRetriever:
             for doc in docs
         ]
         sorted_results = sorted(results, key=lambda x: x[1], reverse=True)[:top_k]
-
+        retrieved_ids = [doc.metadata["id"] for doc,_ in sorted_results]
         if self.eval_mode:
             scores = [s for _, s in sorted_results]
+            
             self.eval_info = {
                 "mean_score": mean(scores) if scores else 0.0,
                 "top1_score": scores[0] if scores else None,
-                "top_k": top_k
+                "top_k": top_k,
+                "retrieved_ids": retrieved_ids
             }
 
         return sorted_results
 
-    def answer(self, question: str) -> str:
+    def answer(self, question: str, passage:str = None) -> str:
         log.info(f"Question posée : {question} ")
         docs = self.retrieve(question)
         if not docs:
             return "No relevant information found in the document database."
-
         context = "\n\n".join(doc.page_content for doc, _ in docs)
         gen_cfg = self.config.get_generation_params()
         
-        if self.eval_mode:
-            self.eval_info.update({
-                "context_length_chars": len(context),
-                "temperature": gen_cfg["temperature"],
-                "gen_model": gen_cfg["model"],
-                "provider": gen_cfg["provider"],
-                "embedding_model": self.embedder.model_name
-            })
+        
 
         prompt = PromptTemplate.from_template(
             gen_cfg["qa_prompt_template"] or
@@ -162,6 +157,35 @@ class RAGRetriever:
             context=context,
             question=question
         )
-
+        enc = tiktoken.get_encoding("cl100k_base")
         response = self.llm.invoke(prompt)
+        if self.eval_mode:
+            self.eval_info.update({
+                "context_length": len(enc.encode(context)),
+                "temperature": gen_cfg["temperature"],
+                "gen_model": gen_cfg["model"],
+                "provider": gen_cfg["provider"],
+                "embedding_model": self.embedder.model_name,
+                "chunking_strategy": self.cs,
+                "embedding" : "dense",
+                "rewrite query " : self.config.get_use_query_rewriting(),
+                "multi_query" : self.config.get_use_multi_queries(),
+            })
+            self.eval_info.update(response.response_metadata["token_usage"])
+            passage_found = False
+            passage_rank = 0
+            if passage:
+                norm_passage = passage.strip().lower()
+                for i, (doc, _) in enumerate(docs):
+                    if norm_passage in doc.page_content.strip().lower():
+                        passage_found = True
+                        passage_rank = i + 1
+                        break
+            self.eval_info.update({
+                "passage_found": passage_found,
+                "passage_rank": passage_rank
+            })
+                  
+                
+        #print(response)
         return getattr(response, "content", str(response)).strip()

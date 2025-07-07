@@ -21,15 +21,23 @@ import urllib.request
 
 # Initialize configuration manager
 config_manager = ConfigManager()
-docs_splitter = DocumentSplitter()
 duckdbManager = DuckDBManager()
 
-def run_loading_pipeline():
+def run_loading_pipeline(config: ConfigManager = None, config_overrides: dict = None):
     """
     Run the document loading and embedding pipeline.
+
+    Args:
+        config: Optional ConfigManager instance (default: global).
+        config_overrides: Optional dictionary to override configuration values.
     """
-    export_split = config_manager.get_export_split()
-    # Get path provider
+    cfg = config or config_manager
+    if config_overrides:
+        cfg._config.update(config_overrides)
+
+    docs_splitter = DocumentSplitter()
+
+    export_split = cfg.get_export_split()
     path_provider = PathProvider()
 
     # Build index and process files
@@ -48,8 +56,8 @@ def run_loading_pipeline():
         export_documents_to_json(documents=docs)
 
     # Vectorize documents
-    chroma_embedder = ChromaEmbedder()
+    chroma_embedder = ChromaEmbedder(config=cfg)
     chroma_embedder.store_documents(docs)
 
 # Run the pipeline with the configuration
-run_loading_pipeline()
+#run_loading_pipeline()

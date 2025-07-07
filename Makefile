@@ -5,7 +5,6 @@ clean:
 	find . -type d -name "__pycache__" -exec rm -r {} +
 	rm -rf .pytest_cache .mypy_cache dist/ build/ *.egg-info
 	find . -type f -name "*.duckdb" -exec rm -f {} +
-	find . -type f -name "*.json" -exec rm -f {} +
 	find . -type d -name "*chromaDB" -exec rm -r {} +
 
 test:

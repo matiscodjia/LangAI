@@ -14,71 +14,24 @@ from backend.RagCore.Utils.configManager import ConfigManager
 config_manager = ConfigManager()
 
 
-def run_query_pipeline(query: str, config: dict = None, model: str = None):
+def run_query_pipeline(query: str):
     """
-    Run the RAG query pipeline.
-
-    This function retrieves documents relevant to the query and generates
-    an answer based on the retrieved documents.
-
-    Args:
-        query: The query to process.
-        config: Configuration dictionary from the UI. If None, uses the global configuration.
-        model: The generation model to use. If None, uses the model from configuration.
-
-    Returns:
-        Dictionary with the query results.
+    Pipeline RAG simplifié : récupération + génération via RAGRetriever.
     """
-    # Get configuration
-    generation_config = config_manager.get_generation_config()
-
-    # Use UI config if provided, otherwise use global config
-    if config is None:
-        config = {}
-        retrieval_config = config_manager.get_retrieval_config()
-        chromadb_config = config_manager.get_chromadb_config()
-        config["collection"] = chromadb_config.get("collection_name", "default")
-        config["use_query_rewrite"] = retrieval_config.get("use_query_rewrite", True)
-        config["use_multi_query"] = retrieval_config.get("use_multi_query", True)
-        config["use_hyde"] = retrieval_config.get("use_hyde", True)
-        config["top_k"] = retrieval_config.get("top_k", 4)
-        config["system_prompt"] = generation_config.get("system_prompt", "")
-    # Initialize retriever
     retriever = RAGRetriever()
 
-    # 1. Retrieve documents
-    docs = retriever.retrieve(
-        question=query,
-    )
+    # Récupération des documents
+    docs = retriever.retrieve(query)
 
-    # 2. Generate answer
-    context = "\n\n".join(doc.page_content for doc, _ in docs)
-
-    # Get QA prompt template from config
-    qa_prompt_template = generation_config.get(
-        "qa_prompt_template", 
-        "<s>[INST] {system_prompt}\n\nContexte :\n{context}\n\nQuestion : {question} [/INST]"
-    )
-
-    qa_prompt = PromptTemplate.from_template(qa_prompt_template)
-
-    full_prompt = qa_prompt.format(
-        system_prompt=config.get("system_prompt", generation_config.get("system_prompt", "")),
-        context=context,
-        question=query
-    )
-    print("🧾 Prompt envoyé :\n", full_prompt)
-
-    response = retriever.llm.invoke(full_prompt)
+    # Génération de réponse basée sur les documents
+    answer = retriever.answer(query)
 
     return {
-        "source_documents": docs,  # [(doc, score)]
+        "result": answer,  # chaîne de texte directement affichable
+        "source_documents": docs,
         "query_embedding": retriever.embedder.embed_query(query),
-        "doc_embeddings": [
-            retriever.embedder.embed_query(doc.page_content) for doc, _ in docs
-        ],
+        "doc_embeddings": [retriever.embedder.embed_query(doc.page_content) for doc, _ in docs],
         "similarity_scores": [score for _, score in docs],
-        "result": response,
     }
 
 

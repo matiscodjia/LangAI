@@ -64,9 +64,6 @@ class PathProvider:
                 """
                 CREATE TABLE IF NOT EXISTS documents (
                     source TEXT,
-                    date TEXT,
-                    sommaire TEXT,
-                    theme_global TEXT,
                     texte TEXT
                 )
             """

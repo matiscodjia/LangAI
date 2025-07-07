@@ -1,0 +1,82 @@
+# RAG System Configuration
+
+# Document Processing Configuration
+document_processing:
+  chunking_strategy: strategy_3
+  export_split: true
+  export_name: 1881-01-20-cs3
+  path: "1881"
+
+# Embedding Configuration
+embedding:
+  model_name: antoinelouis/french-gte-multilingual-base
+  device: cpu
+  trust_remote_code: true
+  normalize_embeddings: true
+  batch_size: 3
+
+# ChromaDB Configuration
+chromadb:
+  collection_name: 1881-01-20-cs3
+  hnsw_space: cosine
+
+# Retrieval Configuration
+retrieval:
+  top_k: 3
+  use_query_rewrite: false
+  use_multi_query: false
+  use_hyde: false
+  use_rerank: false
+  query_prompts:
+    rewrite: "Réécris cette question de façon plus précise pour interroger une base documentaire : {question}"
+    multi_query: "Génère 3 reformulations différentes mais pertinentes de la question suivante : {question}"
+    hyde: "Imagine une réponse hypothétique à cette question dans une limite stricte de 15 lignes: {question}"
+
+# Generation Configuration
+generation:
+  model: mistral-medium
+  provider: mistral
+  temperature: 0.0
+  context_length: 4000
+  system_prompt: |
+    Tu es un assistant utile qui répond aux questions en te basant sur le contexte fourni.
+
+    Si la réponse ne se trouve pas dans le contexte, réponds : 
+    « Je n'ai pas assez d'informations pour répondre à cette question. »
+  qa_prompt_template: "<s>[INST] {system_prompt}\n\nContexte :\n{context}\n\nQuestion : {question} [/INST]"
+runtime:
+  eval_mode: true
+
+# Visualization Configuration
+visualization:
+  method: pca
+  n_components: 2
+  random_seed: 42
+  tsne_learning_rate: 200
+  tsne_perplexity: 0
+
+# UI Configuration
+ui:
+  chunking_strategies:
+    - semantic
+    - strategy_0
+    - strategy_1
+    - strategy_2
+    - strategy_3
+    - strategy_4
+    - strategy_pp
+  embedding_models:
+    - nomic-embed-text:latest
+    - sentence-transformers/all-MiniLM-L6-v2
+    - sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2
+    - antoinelouis/french-gte-multilingual-base
+  generation_models:
+    - deepseek-r1:7b
+    - mistral:latest
+    - llama3.2:latest
+    - mistral-medium
+    - gpt-4
+  visualization_methods:
+    - pca
+    - tsne
+    - umap

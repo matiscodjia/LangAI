@@ -6,6 +6,7 @@ torch>=2.3
 sentence-transformers>=2.2
 matplotlib
 seaborn
+tiktoken>=0.5.1
 
 # Plotting
 plotly>=6.0
